@@ -2,6 +2,7 @@ import Matrix from "./matrix.js";
 import Player from "./player.js";
 
 let player;
+let projector;
 
 async function loadTextFile(path, files){
     const result = await fetch(path);
@@ -22,14 +23,15 @@ async function main() {
     await loadTextFile("models/shadesmooth.obj", files);
 
 
-    await loadTextFile("shaders/shader.vert", files);
-    await loadTextFile("shaders/shader.frag", files);
+    await loadTextFile("shaders/vert.glsl", files);
+    await loadTextFile("shaders/frag.glsl", files);
     init(files);
 }
 
 function init(files) {
 
-    player = new Player();
+    player = new Player(true);
+    projector = new Player(false);
 
     const canvas = document.querySelector("#glcanvas");
 
@@ -40,8 +42,8 @@ function init(files) {
         return;
     }
 
-    const vertexShader = createShader(gl, gl.VERTEX_SHADER, files["shaders/shader.vert"]);
-    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, files["shaders/shader.frag"]);
+    const vertexShader = createShader(gl, gl.VERTEX_SHADER, files["shaders/vert.glsl"]);
+    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, files["shaders/frag.glsl"]);
     const program = createProgram(gl, vertexShader, fragmentShader);
 
     const vao = gl.createVertexArray();
@@ -76,16 +78,18 @@ function init(files) {
     gl.enableVertexAttribArray(normalAttributeLocation);
     gl.vertexAttribPointer(normalAttributeLocation, 3, gl.FLOAT, false, 0, 0);
 
-    const matrixLocation = gl.getUniformLocation(program, "u_matrix");
+    const matrixUserLocation = gl.getUniformLocation(program, "u_user_matrix");
+    const matrixProjectorLocation = gl.getUniformLocation(program, "u_projector_matrix");
+
 
     // gl.enable(gl.CULL_FACE);
     gl.enable(gl.DEPTH_TEST);
 
-    redraw({gl, program, canvas, matrixLocation, vao, vertices});
+    redraw({gl, program, canvas, matrixUserLocation, matrixProjectorLocation, vao, vertices});
 }
 
 function redraw(settings) {
-    const {gl, program, canvas, matrixLocation, vao, vertices} = settings;
+    const {gl, program, canvas, matrixUserLocation, matrixProjectorLocation, vao, vertices} = settings;
 
     player.update();
 
@@ -96,20 +100,15 @@ function redraw(settings) {
 
     gl.viewport(0, 0, canvas.width, canvas.height);
 
-    const t = Date.now()/1000;
     // const m = Matrix.translation(0.5, 0, 0)
     // const m = Matrix.yRotation(t).translate(0.5, 0, 0);
-    const m = Matrix
-        .makePerspective(canvas.width/canvas.height, false, 90)
-        .xRotate(player.pitch)
-
-        .yRotate(player.yaw)
-        .translate(-player.position.x, -player.position.y, -player.position.z)
-        .translate(0, 0, 0)
+    const m = player.getMatrix(canvas);
         // .yRotate(t)
         // .xRotate(t*2);
 
-    gl.uniformMatrix4fv(matrixLocation, true, m.e);
+    gl.uniformMatrix4fv(matrixUserLocation, true, m.e);
+    gl.uniformMatrix4fv(matrixProjectorLocation, true, projector.getMatrix(canvas).e);
+
 
     gl.clearColor(0xC2/255, 0xC3/255, 0xC7/255, 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);

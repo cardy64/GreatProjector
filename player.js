@@ -1,4 +1,5 @@
 import Vector from "./vector.js";
+import Matrix from "./matrix.js";
 
 export default class Player {
 
@@ -8,7 +9,7 @@ export default class Player {
     static lastX = 0;
     static tabbedIn = false;
 
-    constructor(canvas) {
+    constructor(canMove) {
         this.position = new Vector(0, 2, 0);
         this.velocity = new Vector(0);
         this.pitch = 0;
@@ -16,32 +17,43 @@ export default class Player {
         this.speed = 0.1;
         this.sensitivity = 0.005;
 
-        window.addEventListener("keydown", function(e) {
-            let key = e.key.toUpperCase();
-            if (!Player.downKeys.includes(key)) {
-                Player.downKeys.push(key)
-            }
-            if (e.key === "Escape") {
-                Player.tabbedIn = false;
-            }
-        })
+        if (canMove) {
+            window.addEventListener("keydown", function (e) {
+                let key = e.key.toUpperCase();
+                if (!Player.downKeys.includes(key)) {
+                    Player.downKeys.push(key)
+                }
+                if (e.key === "Escape") {
+                    Player.tabbedIn = false;
+                }
+            })
 
-        window.addEventListener("keyup", function(e) {
-            let key = e.key.toUpperCase();
-            if (Player.downKeys.includes(key)) {
-                Player.downKeys.splice(Player.downKeys.indexOf(key), 1);
-            }
-        })
+            window.addEventListener("keyup", function (e) {
+                let key = e.key.toUpperCase();
+                if (Player.downKeys.includes(key)) {
+                    Player.downKeys.splice(Player.downKeys.indexOf(key), 1);
+                }
+            })
 
-        window.addEventListener("mousedown", function(e) {
-            document.querySelector("#glcanvas").requestPointerLock();
-            Player.tabbedIn = true;
-        })
+            window.addEventListener("mousedown", function (e) {
+                document.querySelector("#glcanvas").requestPointerLock();
+                Player.tabbedIn = true;
+            })
 
-        window.addEventListener("mousemove", function(e) {
-            Player.dPitch = e.movementY;
-            Player.dYaw = e.movementX;
-        })
+            window.addEventListener("mousemove", function (e) {
+                Player.dPitch = e.movementY;
+                Player.dYaw = e.movementX;
+            })
+        }
+    }
+
+    getMatrix(canvas) {
+        return Matrix
+            .makePerspective(canvas.width/canvas.height, false, 90)
+            .xRotate(this.pitch)
+            .yRotate(this.yaw)
+            .translate(-this.position.x, -this.position.y, -this.position.z)
+            .translate(0, 0, 0);
     }
 
     update() {
