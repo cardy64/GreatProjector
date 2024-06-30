@@ -1,5 +1,6 @@
 import Matrix from "./matrix.js";
 import Player from "./player.js";
+import Vector from "./vector.js";
 
 let player;
 let projector;
@@ -16,10 +17,14 @@ async function loadTextFile(path){
     }
 }
 
+let monkey;
+
 async function main() {
     await loadTextFile("models/smoothmonkey.obj");
 
     await loadTextFile("models/monkey.obj");
+    await loadTextFile("models/monkey.mtl");
+
     await loadTextFile("models/painting.obj");
     await loadTextFile("models/testcube.obj");
     await loadTextFile("models/shadesmooth.obj");
@@ -43,10 +48,15 @@ class Entity {
     constructor(program, meshName) {
         this.meshName = "models/" + meshName;
         this.mesh = Mesh.makeMesh(files[this.meshName + ".obj"], files[this.meshName + ".mtl"], program);
+        this.position = new Vector(0);
+        this.rotationX = 0;
+        this.rotationY = 0;
+        this.rotationZ = 0;
+        this.scale = 1;
     }
 
     draw() {
-        this.mesh.draw();
+        this.mesh.draw(this.position.x, this.position.y, this.position.z, this.rotationX, this.rotationY, this.rotationZ, this.scale);
     }
 }
 
@@ -68,11 +78,16 @@ function init() {
     const fragmentShader = createShader(gl.FRAGMENT_SHADER, files["shaders/frag.glsl"]);
     const program = createProgram(vertexShader, fragmentShader);
 
+    monkey = new Entity(program, "monkey");
+    monkey.position.z = 5;
+    monkey.position.y = 1.5;
+    monkey.scale = 0.5;
+
     const entities = [
         // new Entity(program, "painting.obj"),
         // new Entity(program, "monkey.obj")
-        new Entity(program, "muse2")
-
+        new Entity(program, "muse2"),
+        monkey
     ];
 
     const matrixUserLocation = gl.getUniformLocation(program, "u_user_matrix");
@@ -90,6 +105,8 @@ function redraw(settings) {
     const {gl, program, canvas, matrixUserLocation, matrixProjectorLocation, entities} = settings;
 
     player.update();
+
+    monkey.rotationY = Date.now()/1000;
 
     canvas.width = canvas.clientWidth;
     canvas.height = canvas.clientHeight;
@@ -281,8 +298,8 @@ class Mesh {
         this.parts.forEach(part => part.bake());
     }
 
-    draw() {
-        this.parts.forEach(part => part.draw());
+    draw(x, y, z, rx, ry, rz, s) {
+        this.parts.forEach(part => part.draw(x, y, z, rx, ry, rz, s));
     }
 }
 
@@ -317,12 +334,26 @@ class Part {
         gl.vertexAttribPointer(normalAttributeLocation, 3, gl.FLOAT, false, 0, 0);
 
         this.colorDifffuseAttributeLocation = gl.getUniformLocation(this.mesh.program, "u_color_diffuse");
+        this.objectMatrixAttributeLocation = gl.getUniformLocation(this.mesh.program, "u_object_matrix");
+        this.objectRotationMatrixAttributeLocation = gl.getUniformLocation(this.mesh.program, "u_object_rotation_matrix");
+
 
         gl.bindVertexArray(null);
     }
 
-    draw() {
+    draw(x, y, z, rx, ry, rz, s) {
         gl.uniform3fv(this.colorDifffuseAttributeLocation, this.material.diffuse);
+        const objectMatrix = Matrix.
+            translation(x ?? 0, y ?? 0, z ?? 0)
+            .xRotate(rx ?? 0).yRotate(ry ?? 0).zRotate(rz ?? 0)
+            .scale(s ?? 1, s ?? 1, s ?? 1);
+        const objectRotationMatrix = Matrix.
+            translation(0, 0, 0)
+            .xRotate(rx ?? 0).yRotate(ry ?? 0).zRotate(rz ?? 0)
+        //     .scale(1/s ?? 1, 1/s ?? 1, 1/s ?? 1);
+
+        gl.uniformMatrix4fv(this.objectMatrixAttributeLocation, true, objectMatrix.e);
+        gl.uniformMatrix4fv(this.objectRotationMatrixAttributeLocation, true, objectRotationMatrix.e)
         gl.bindVertexArray(this.vao);
         gl.drawArrays(gl.TRIANGLES, 0, this.vertices.length / 4);
         gl.bindVertexArray(null);

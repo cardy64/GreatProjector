@@ -20,7 +20,7 @@ float hex(int val) {
 void main() {
     float b = dot(normalize(frag_normal), light);
     b = max(b, 0.0);
-    b = b*0.8+0.2;
+    b = b*0.5+0.5;
 
     vec4 c1 = vec4(u_color_diffuse*b, 1.0);
 

@@ -60,6 +60,12 @@ export default class Player {
             .translate(0, -this.height, 0);
     }
 
+    getNormalMatrix(canvas) {
+        return Matrix.translation(0, 0, 0)
+            .xRotate(this.pitch)
+            .yRotate(this.yaw);
+    }
+
     update() {
 
         const now = Date.now();
