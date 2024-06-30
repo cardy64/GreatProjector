@@ -4,7 +4,10 @@ import Player from "./player.js";
 let player;
 let projector;
 
-async function loadTextFile(path, files){
+const files = {};
+let gl;
+
+async function loadTextFile(path){
     const result = await fetch(path);
     if (result.status === 200) {
         files[path] = await result.text();
@@ -14,40 +17,76 @@ async function loadTextFile(path, files){
 }
 
 async function main() {
-    const files = {};
-    await loadTextFile("models/smoothmonkey.obj", files);
+    await loadTextFile("models/smoothmonkey.obj");
 
-    await loadTextFile("models/monkey.obj", files);
-    await loadTextFile("models/painting.obj", files);
-    await loadTextFile("models/testcube.obj", files);
-    await loadTextFile("models/shadesmooth.obj", files);
+    await loadTextFile("models/monkey.obj");
+    await loadTextFile("models/painting.obj");
+    await loadTextFile("models/testcube.obj");
+    await loadTextFile("models/shadesmooth.obj");
 
 
-    await loadTextFile("shaders/vert.glsl", files);
-    await loadTextFile("shaders/frag.glsl", files);
-    init(files);
+    await loadTextFile("shaders/vert.glsl");
+    await loadTextFile("shaders/frag.glsl");
+    init();
 }
 
-function init(files) {
+class Entity {
+    constructor(program, meshName) {
+        this.meshName = "models/" + meshName;
+        this.mesh = importOBJ(files[this.meshName]);
+
+        const vao = gl.createVertexArray();
+        gl.bindVertexArray(vao);
+
+        const vertices = this.mesh.vertices;
+        const normals = this.mesh.normals;
+
+        const vertexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+
+        const positionAttributeLocation = gl.getAttribLocation(program, "a_position");
+        gl.enableVertexAttribArray(positionAttributeLocation);
+        gl.vertexAttribPointer(positionAttributeLocation, 4, gl.FLOAT, false, 0, 0);
+
+        const normalBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STATIC_DRAW);
+        const normalAttributeLocation = gl.getAttribLocation(program, "a_normal");
+        gl.enableVertexAttribArray(normalAttributeLocation);
+        gl.vertexAttribPointer(normalAttributeLocation, 3, gl.FLOAT, false, 0, 0);
+
+        gl.bindVertexArray(null);
+
+        this.vao = vao;
+        this.vertices = vertices;
+    }
+
+    draw() {
+        gl.bindVertexArray(this.vao);
+        gl.drawArrays(gl.TRIANGLES, 0, this.vertices.length / 4);
+        gl.bindVertexArray(null);
+
+    }
+}
+
+function init() {
 
     player = new Player(true);
     projector = new Player(false);
 
     const canvas = document.querySelector("#glcanvas");
 
-    const gl = canvas.getContext("webgl2");
+    gl = canvas.getContext("webgl2");
 
     if (gl === null) {
         alert("Unable to initialize WebGL. Your browser or machine may not support it.");
         return;
     }
 
-    const vertexShader = createShader(gl, gl.VERTEX_SHADER, files["shaders/vert.glsl"]);
-    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, files["shaders/frag.glsl"]);
-    const program = createProgram(gl, vertexShader, fragmentShader);
-
-    const vao = gl.createVertexArray();
-    gl.bindVertexArray(vao);
+    const vertexShader = createShader(gl.VERTEX_SHADER, files["shaders/vert.glsl"]);
+    const fragmentShader = createShader(gl.FRAGMENT_SHADER, files["shaders/frag.glsl"]);
+    const program = createProgram(vertexShader, fragmentShader);
 
     // const vertices = [
     //     -0.5, -0.5, 1, 1,
@@ -59,24 +98,10 @@ function init(files) {
     //     -0.5, -0.5, 2, 1,
     // ]
 
-    const mesh = importOBJ(files["models/painting.obj"]);
-
-    const vertices = mesh.vertices;
-    const normals = mesh.normals;
-
-    const vertexBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-    const positionAttributeLocation = gl.getAttribLocation(program, "a_position");
-    gl.enableVertexAttribArray(positionAttributeLocation);
-    gl.vertexAttribPointer(positionAttributeLocation, 4, gl.FLOAT, false, 0, 0);
-
-    const normalBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STATIC_DRAW);
-    const normalAttributeLocation = gl.getAttribLocation(program, "a_normal");
-    gl.enableVertexAttribArray(normalAttributeLocation);
-    gl.vertexAttribPointer(normalAttributeLocation, 3, gl.FLOAT, false, 0, 0);
+    const entities = [
+        new Entity(program, "painting.obj"),
+        new Entity(program, "monkey.obj")
+    ];
 
     const matrixUserLocation = gl.getUniformLocation(program, "u_user_matrix");
     const matrixProjectorLocation = gl.getUniformLocation(program, "u_projector_matrix");
@@ -85,11 +110,11 @@ function init(files) {
     // gl.enable(gl.CULL_FACE);
     gl.enable(gl.DEPTH_TEST);
 
-    redraw({gl, program, canvas, matrixUserLocation, matrixProjectorLocation, vao, vertices});
+    redraw({gl, program, canvas, matrixUserLocation, matrixProjectorLocation, entities});
 }
 
 function redraw(settings) {
-    const {gl, program, canvas, matrixUserLocation, matrixProjectorLocation, vao, vertices} = settings;
+    const {gl, program, canvas, matrixUserLocation, matrixProjectorLocation, entities} = settings;
 
     player.update();
 
@@ -100,11 +125,7 @@ function redraw(settings) {
 
     gl.viewport(0, 0, canvas.width, canvas.height);
 
-    // const m = Matrix.translation(0.5, 0, 0)
-    // const m = Matrix.yRotation(t).translate(0.5, 0, 0);
     const m = player.getMatrix(canvas);
-        // .yRotate(t)
-        // .xRotate(t*2);
 
     gl.uniformMatrix4fv(matrixUserLocation, true, m.e);
     gl.uniformMatrix4fv(matrixProjectorLocation, true, projector.getMatrix(canvas).e);
@@ -113,13 +134,13 @@ function redraw(settings) {
     gl.clearColor(0xC2/255, 0xC3/255, 0xC7/255, 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    gl.bindVertexArray(vao);
-    gl.drawArrays(gl.TRIANGLES, 0, vertices.length / 4);
-
+    for (const entity of entities) {
+        entity.draw();
+    }
     requestAnimationFrame(() => redraw(settings));
 }
 
-function createShader(gl, type, source) {
+function createShader(type, source) {
     const shader = gl.createShader(type);
     if (shader === null) {
         throw new Error("Can't create GLSL vertex shader.");
@@ -138,7 +159,7 @@ function createShader(gl, type, source) {
     return shader;
 }
 
-function createProgram(gl, vertexShader, fragmentShader) {
+function createProgram(vertexShader, fragmentShader) {
     const program = gl.createProgram();
     if (program === null) {
         throw new Error("Can't create GLSL program");
