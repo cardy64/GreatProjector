@@ -24,49 +24,29 @@ async function main() {
     await loadTextFile("models/testcube.obj");
     await loadTextFile("models/shadesmooth.obj");
 
+    await loadTextFile("models/colortest.obj");
+    await loadTextFile("models/colortest.mtl");
+
+
+    await loadTextFile("models/muse2.obj");
+    await loadTextFile("models/muse2.mtl");
 
     await loadTextFile("shaders/vert.glsl");
     await loadTextFile("shaders/frag.glsl");
+
+    // console.log(importMTL(files["models/colortest.mtl"]));
+
     init();
 }
 
 class Entity {
     constructor(program, meshName) {
         this.meshName = "models/" + meshName;
-        this.mesh = importOBJ(files[this.meshName]);
-
-        const vao = gl.createVertexArray();
-        gl.bindVertexArray(vao);
-
-        const vertices = this.mesh.vertices;
-        const normals = this.mesh.normals;
-
-        const vertexBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-
-        const positionAttributeLocation = gl.getAttribLocation(program, "a_position");
-        gl.enableVertexAttribArray(positionAttributeLocation);
-        gl.vertexAttribPointer(positionAttributeLocation, 4, gl.FLOAT, false, 0, 0);
-
-        const normalBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STATIC_DRAW);
-        const normalAttributeLocation = gl.getAttribLocation(program, "a_normal");
-        gl.enableVertexAttribArray(normalAttributeLocation);
-        gl.vertexAttribPointer(normalAttributeLocation, 3, gl.FLOAT, false, 0, 0);
-
-        gl.bindVertexArray(null);
-
-        this.vao = vao;
-        this.vertices = vertices;
+        this.mesh = Mesh.makeMesh(files[this.meshName + ".obj"], files[this.meshName + ".mtl"], program);
     }
 
     draw() {
-        gl.bindVertexArray(this.vao);
-        gl.drawArrays(gl.TRIANGLES, 0, this.vertices.length / 4);
-        gl.bindVertexArray(null);
-
+        this.mesh.draw();
     }
 }
 
@@ -88,19 +68,11 @@ function init() {
     const fragmentShader = createShader(gl.FRAGMENT_SHADER, files["shaders/frag.glsl"]);
     const program = createProgram(vertexShader, fragmentShader);
 
-    // const vertices = [
-    //     -0.5, -0.5, 1, 1,
-    //     0.5, -0.5, 1, 1,
-    //     0.5, -0.5, 2, 1,
-    //
-    //     -0.5, -0.5, 1, 1,
-    //     0.5, -0.5, 2, 1,
-    //     -0.5, -0.5, 2, 1,
-    // ]
-
     const entities = [
-        new Entity(program, "painting.obj"),
-        new Entity(program, "monkey.obj")
+        // new Entity(program, "painting.obj"),
+        // new Entity(program, "monkey.obj")
+        new Entity(program, "muse2")
+
     ];
 
     const matrixUserLocation = gl.getUniformLocation(program, "u_user_matrix");
@@ -114,6 +86,7 @@ function init() {
 }
 
 function redraw(settings) {
+
     const {gl, program, canvas, matrixUserLocation, matrixProjectorLocation, entities} = settings;
 
     player.update();
@@ -179,21 +152,6 @@ function createProgram(vertexShader, fragmentShader) {
     return program;
 }
 
-function makeMesh(verts, tris, normals) {
-    const vertices = tris.flatMap(i => verts[i].concat([1]));
-    // const normals = [];
-    //
-    // for (let i = 0; i < tris.length; i+=3) {
-    //     const norm = calcNormal(verts[tris[i]], verts[tris[i+1]], verts[tris[i+2]]);
-    //     normals.push(...norm, ...norm, ...norm);
-    // }
-
-    return {
-        vertices,
-        normals,
-    }
-}
-
 function calcNormal(v1, v2, v3) {
 
     const b = [
@@ -214,43 +172,162 @@ function calcNormal(v1, v2, v3) {
     ]
 }
 
-function importOBJ(file) {
-    const verts = [];
-    const tris = [];
-    const normOps = [];
-    const norms = [];
-    const lines = file.split("\n");
-    for (let i = 0; i < lines.length; i++) {
-        lines[i] = lines[i].split(" ");
-        switch (lines[i][0]) {
-            case "v":
-                const vert = [parseFloat(lines[i][1]), parseFloat(lines[i][2]), parseFloat(lines[i][3])];
-                verts.push(vert);
-                break;
-            case "vn":
-                const norm = [parseFloat(lines[i][1]), parseFloat(lines[i][2]), parseFloat(lines[i][3])];
-                normOps.push(norm);
-                break;
-            case "f":
-                const vertIndexes = [];
-                const normIndexes = [];
-                const length = lines[i].length;
-                for (let j = 1; j < length; j++) {
-                    vertIndexes.push(parseInt(lines[i][j].split("/")[0])-1);
-                    normIndexes.push(parseInt(lines[i][j].split("/")[2])-1);
-                }
-                for (let j = 1; j < vertIndexes.length - 1; j++) {
-                    tris.push(vertIndexes[0], vertIndexes[j], vertIndexes[j+1]);
-                    norms.push(...normOps[normIndexes[0]]);
-                    norms.push(...normOps[normIndexes[j]]);
-                    norms.push(...normOps[normIndexes[j+1]]);
-                }
-                break;
-            default:
-                break;
+class Material {
+    constructor(name, diffuse) {
+        this.name = name;
+        this.diffuse = diffuse;
+    }
+}
+
+function importMTL(file) {
+    const finalMaterials = [];
+    const materialTexts = file.split("\nnewmtl ");
+    for (const materialText of materialTexts) {
+        const lines = ("newmtl " + materialText).split("\n");
+
+        let name = null;
+        let diffuse = null;
+
+        for (const line of lines) {
+            const words = line.split(" ");
+            switch (words[0]) {
+                case "newmtl":
+                    name = words[1];
+                    break;
+                case "Kd":
+                    diffuse = [parseFloat(words[1]), parseFloat(words[2]), parseFloat(words[3])];
+                    break;
+            }
+        }
+
+        if (name !== null || diffuse !== null) {
+            console.log("m - " + name);
+            console.log(diffuse);
+            if (name === null || diffuse === null) {
+                console.error("Material is broken!");
+                continue;
+            }
+            finalMaterials.push(new Material(name, diffuse));
         }
     }
-    return makeMesh(verts, tris, norms);
+    return finalMaterials;
 }
+
+class Mesh {
+    constructor(program) {
+        this.program = program;
+        this.vertexOptions = [];
+        this.normalOptions = [];
+        this.parts = [];
+    }
+
+    static makeMesh(objFile, mtlFile, program) {
+
+        const rawMaterials = importMTL(mtlFile);
+        const materials = {};
+
+        rawMaterials.forEach(material => materials[material.name] = material);
+
+        console.log(materials);
+
+        const mesh = new Mesh(program);
+        const lines = objFile.split("\n");
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].split(" ");
+            switch (line[0]) {
+                case "v":
+                    const vert = [parseFloat(line[1]), parseFloat(line[2]), parseFloat(line[3])];
+                    mesh.vertexOptions.push(vert);
+                    break;
+                case "vn":
+                    const norm = [parseFloat(line[1]), parseFloat(line[2]), parseFloat(line[3])];
+                    mesh.normalOptions.push(norm);
+                    break;
+                case "usemtl":
+                    mesh.parts.push(new Part(mesh, materials[line[1]]));
+                    break;
+                case "f":
+
+                    if (mesh.parts.length === 0) {
+                        mesh.parts.push(new Part(mesh, new Material("NoMat", [1, 0, 1])));
+                    }
+
+                    const part = mesh.parts[mesh.parts.length - 1];
+
+                    const vertIndexes = [];
+                    const normIndexes = [];
+                    const length = line.length;
+                    for (let j = 1; j < length; j++) {
+                        vertIndexes.push(parseInt(line[j].split("/")[0])-1);
+                        normIndexes.push(parseInt(line[j].split("/")[2])-1);
+                    }
+                    for (let j = 1; j < vertIndexes.length - 1; j++) {
+                        part.triangles.push(vertIndexes[0], vertIndexes[j], vertIndexes[j+1]);
+                        part.normals.push(...mesh.normalOptions[normIndexes[0]]);
+                        part.normals.push(...mesh.normalOptions[normIndexes[j]]);
+                        part.normals.push(...mesh.normalOptions[normIndexes[j+1]]);
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+        mesh.bake();
+        console.log(mesh);
+        return mesh;
+    }
+
+    bake() {
+        this.parts.forEach(part => part.bake());
+    }
+
+    draw() {
+        this.parts.forEach(part => part.draw());
+    }
+}
+
+class Part {
+    constructor(mesh, material) {
+        this.mesh = mesh;
+        this.material = material;
+        this.vertices = [];
+        this.triangles = [];
+        this.normalOptions = [];
+        this.normals = [];
+    }
+
+    bake() {
+        this.vertices = this.triangles.flatMap(i => this.mesh.vertexOptions[i].concat([1]));
+
+        this.vao = gl.createVertexArray();
+        gl.bindVertexArray(this.vao);
+
+        const vertexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.vertices), gl.STATIC_DRAW);
+        const positionAttributeLocation = gl.getAttribLocation(this.mesh.program, "a_position");
+        gl.enableVertexAttribArray(positionAttributeLocation);
+        gl.vertexAttribPointer(positionAttributeLocation, 4, gl.FLOAT, false, 0, 0);
+
+        const normalBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.normals), gl.STATIC_DRAW);
+        const normalAttributeLocation = gl.getAttribLocation(this.mesh.program, "a_normal");
+        gl.enableVertexAttribArray(normalAttributeLocation);
+        gl.vertexAttribPointer(normalAttributeLocation, 3, gl.FLOAT, false, 0, 0);
+
+        this.colorDifffuseAttributeLocation = gl.getUniformLocation(this.mesh.program, "u_color_diffuse");
+
+        gl.bindVertexArray(null);
+    }
+
+    draw() {
+        gl.uniform3fv(this.colorDifffuseAttributeLocation, this.material.diffuse);
+        gl.bindVertexArray(this.vao);
+        gl.drawArrays(gl.TRIANGLES, 0, this.vertices.length / 4);
+        gl.bindVertexArray(null);
+    }
+}
+
 
 main();

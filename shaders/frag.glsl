@@ -5,6 +5,7 @@ precision highp float;
 uniform mat4 u_user_matrix;
 uniform mat4 u_projector_matrix;
 uniform sampler2D uSampler;
+uniform vec3 u_color_diffuse;
 
 in vec3 frag_normal;
 in vec4 frag_position;
@@ -21,7 +22,8 @@ void main() {
     b = max(b, 0.0);
     b = b*0.8+0.2;
 
-    vec4 c1 = vec4(vec3(hex(0xFF), hex(0xA3), hex(0x00))*b, 1.0);
+    vec4 c1 = vec4(u_color_diffuse*b, 1.0);
+
     vec4 c2 = vec4(vec3(1.0, 0.0, 0.0)*b, 1.0);
 
     vec4 p = u_projector_matrix * frag_position;
@@ -33,5 +35,5 @@ void main() {
               p.y < 1.0 &&
               p.y > -1.0 ? c2 : c1;
 
-    outColor = c3;
+    outColor = c1;
 }

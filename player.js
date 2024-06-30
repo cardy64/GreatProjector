@@ -10,12 +10,16 @@ export default class Player {
     static tabbedIn = false;
 
     constructor(canMove) {
-        this.position = new Vector(0, 2, 0);
+        this.position = new Vector(0, 0, 0);
         this.velocity = new Vector(0);
+        this.height = 1.7;
         this.pitch = 0;
         this.yaw = 0;
-        this.speed = 0.1;
+        this.speed = 0.003;
         this.sensitivity = 0.005;
+
+        this.lastTime = Date.now();
+        this.dt = 0;
 
         if (canMove) {
             window.addEventListener("keydown", function (e) {
@@ -53,10 +57,15 @@ export default class Player {
             .xRotate(this.pitch)
             .yRotate(this.yaw)
             .translate(-this.position.x, -this.position.y, -this.position.z)
-            .translate(0, 0, 0);
+            .translate(0, -this.height, 0);
     }
 
     update() {
+
+        const now = Date.now();
+        this.dt = now - this.lastTime;
+        this.lastTime = now;
+
         if (!Player.tabbedIn) {
             Player.dPitch = 0;
             Player.dYaw = 0;
@@ -83,23 +92,24 @@ export default class Player {
             }
         }
         vel.rotZ(this.yaw);
-        vel.normalize().multiply(this.speed);
+        const runMul = Player.downKeys.includes("SHIFT") ? 2 : 1;
+        vel.normalize().multiply(this.speed).multiply(runMul).multiply(this.dt);
         vel.z = vel.y;
         vel.y = 0;
         this.position.add(vel);
 
-        if (Player.downKeys.includes(" ") && this.position.y === 2) {
-            this.velocity.y = 0.4;
+        if (Player.downKeys.includes(" ") && this.position.y === 0) {
+            this.velocity.y = 0.13;
         }
 
-        if (this.position.y > 2) {
-            this.velocity.y -= 0.05;
+        if (this.position.y > 0) {
+            this.velocity.y -= 0.01;
         }
 
-        this.position.y += this.velocity.y;
+        this.position.y += this.velocity.y * this.dt / 20;
 
-        if (this.position.y <= 2) {
-            this.position.y = 2;
+        if (this.position.y <= 0) {
+            this.position.y = 0;
             this.velocity.y = 0;
         }
     }
