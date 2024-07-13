@@ -92,19 +92,27 @@ function init() {
 
     const matrixUserLocation = gl.getUniformLocation(program, "u_user_matrix");
     const matrixProjectorLocation = gl.getUniformLocation(program, "u_projector_matrix");
+    const iTimeLocation = gl.getUniformLocation(program, "i_time");
 
 
     // gl.enable(gl.CULL_FACE);
     gl.enable(gl.DEPTH_TEST);
 
-    redraw({gl, program, canvas, matrixUserLocation, matrixProjectorLocation, entities});
+    redraw({gl, program, canvas, matrixUserLocation, matrixProjectorLocation, iTimeLocation, entities});
 }
 
 function redraw(settings) {
 
-    const {gl, program, canvas, matrixUserLocation, matrixProjectorLocation, entities} = settings;
+    const {gl, program, canvas, matrixUserLocation, matrixProjectorLocation, iTimeLocation, entities} = settings;
 
     player.update();
+
+    if (Player.downKeys.includes("ARROWLEFT")) {
+        projector.yaw -= 0.02;
+    }
+    if (Player.downKeys.includes("ARROWRIGHT")) {
+        projector.yaw += 0.02;
+    }
 
     monkey.rotationY = Date.now()/1000;
 
@@ -119,7 +127,7 @@ function redraw(settings) {
 
     gl.uniformMatrix4fv(matrixUserLocation, true, m.e);
     gl.uniformMatrix4fv(matrixProjectorLocation, true, projector.getMatrix(canvas).e);
-
+    gl.uniform1i(iTimeLocation, Date.now());
 
     gl.clearColor(0xC2/255, 0xC3/255, 0xC7/255, 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -350,7 +358,7 @@ class Part {
         const objectRotationMatrix = Matrix.
             translation(0, 0, 0)
             .xRotate(rx ?? 0).yRotate(ry ?? 0).zRotate(rz ?? 0)
-        //     .scale(1/s ?? 1, 1/s ?? 1, 1/s ?? 1);
+            .scale(1/(s ?? 1), 1/(s ?? 1), 1/(s ?? 1));
 
         gl.uniformMatrix4fv(this.objectMatrixAttributeLocation, true, objectMatrix.e);
         gl.uniformMatrix4fv(this.objectRotationMatrixAttributeLocation, true, objectRotationMatrix.e)
